@@ -7,7 +7,7 @@ app = FastAPI(title="Cineverse Hub Movie Recommender API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://cineversebox-dac3toka5-vegadjenil2006-4757s-projects.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
