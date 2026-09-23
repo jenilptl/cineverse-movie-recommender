@@ -125,7 +125,7 @@ def search_catalog(
     page: int = 1
 ):
     """
-    Search, filter, sort, and paginate through the full 34,791 movies catalog.
+    Search, filter, sort, and paginate through the full 69,405 movies catalog.
     """
     filtered = df
 
