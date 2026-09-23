@@ -66,3 +66,48 @@ def recommend_movie(title: str, n: int = 10):
         "cluster": cluster,
         "recommendations": recommendations
     }
+
+
+def search_catalog(query: str = "", genre: str = "All genres", limit: int = 50, page: int = 1):
+    """
+    Search and paginate through the full 27,842 movies catalog.
+    """
+    filtered = df
+    if query and query.strip():
+        q = query.strip().lower()
+        mask = (
+            df["title"].astype(str).str.lower().str.contains(q, regex=False) |
+            df["original_title"].astype(str).str.lower().str.contains(q, regex=False) |
+            df["genres"].astype(str).str.lower().str.contains(q, regex=False)
+        )
+        filtered = filtered[mask]
+
+    if genre and genre != "All genres":
+        filtered = filtered[filtered["genres"].astype(str).str.contains(genre, regex=False)]
+
+    filtered = filtered.sort_values(by="popularity", ascending=False)
+    total_count = len(filtered)
+
+    start = max(0, (page - 1) * limit)
+    end = start + limit
+    paged = filtered.iloc[start:end]
+
+    cols = [
+        "id", "title", "original_title", "overview", "poster_path",
+        "release_date", "release_year", "vote_average", "vote_count",
+        "runtime", "genres", "original_language", "popularity", "budget", "revenue"
+    ]
+    available_cols = [c for c in cols if c in paged.columns]
+    paged_df = paged[available_cols].copy()
+
+    if "poster_path" in paged_df.columns:
+        paged_df["poster_path"] = paged_df["poster_path"].apply(
+            lambda x: f"https://image.tmdb.org/t/p/w500{x}" if isinstance(x, str) and x.startswith("/") else (x if isinstance(x, str) else "")
+        )
+
+    return {
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "movies": paged_df.fillna("").to_dict(orient="records")
+    }

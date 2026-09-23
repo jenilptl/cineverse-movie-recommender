@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from Movies import Movie
-from recommender import recommend_movie
+from recommender import recommend_movie, search_catalog
 
 app = FastAPI(title="Cineverse Hub Movie Recommender API")
 
@@ -21,6 +21,10 @@ app.add_middleware(
 @app.get('/')
 def index():
   return {'message': 'Hello World'}
+
+@app.get('/movies')
+def get_movies(search: str = "", genre: str = "All genres", limit: int = 50, page: int = 1):
+  return search_catalog(query=search, genre=genre, limit=limit, page=page)
 
 @app.get('/{name}')
 def get_name(name: str):
