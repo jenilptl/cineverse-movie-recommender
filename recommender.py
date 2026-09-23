@@ -15,12 +15,56 @@ model = model_bundle["model"]
 df = model_bundle["df"]
 X = model_bundle["X"]
 
+import unicodedata
+import re
+
+# Helper for accent and punctuation-insensitive search (e.g. Bāhubali -> bahubali, K.G.F -> kgf)
+def normalize_text(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    normalized = unicodedata.normalize("NFKD", text).encode("ASCII", "ignore").decode("utf-8").lower()
+    cleaned = re.sub(r"[^a-z0-9\s]", "", normalized)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+# Precompute normalized search columns once at startup
+df["_norm_title"] = df["title"].apply(normalize_text)
+df["_norm_orig"] = df["original_title"].apply(normalize_text) if "original_title" in df.columns else df["_norm_title"]
+
 def recommend_movie(title: str, n: int = 10):
     """
     Recommend n movies similar to the given title based on KMeans clustering
     and Euclidean distance on feature vectors.
     """
-    movie = df[df["title"].astype(str).str.lower() == title.strip().lower()]
+    if not title or not title.strip():
+        return None
+
+    raw_query = title.strip().lower()
+    norm_query = normalize_text(title)
+    norm_query_alt = norm_query.replace("aa", "a")
+
+    # 1. Exact match on raw title or original title
+    movie = df[df["title"].astype(str).str.lower() == raw_query]
+    if movie.empty and "original_title" in df.columns:
+        movie = df[df["original_title"].astype(str).str.lower() == raw_query]
+
+    # 2. Normalized exact match (handles accents like Bāhubali == Bahubali)
+    if movie.empty:
+        movie = df[(df["_norm_title"] == norm_query) | (df["_norm_orig"] == norm_query)]
+
+    # 3. Normalized double-letter variation (handles Baahubali == Bahubali)
+    if movie.empty:
+        movie = df[(df["_norm_title"] == norm_query_alt) | (df["_norm_orig"] == norm_query_alt)]
+
+    # 4. Normalized prefix / contains match sorted by popularity
+    if movie.empty:
+        matches = df[
+            df["_norm_title"].str.contains(norm_query, regex=False) |
+            df["_norm_title"].str.contains(norm_query_alt, regex=False) |
+            df["_norm_orig"].str.contains(norm_query, regex=False)
+        ]
+        if not matches.empty:
+            movie = matches.sort_values(by="popularity", ascending=False).head(1)
+
     if movie.empty:
         return None
 
@@ -74,11 +118,15 @@ def search_catalog(query: str = "", genre: str = "All genres", limit: int = 50, 
     """
     filtered = df
     if query and query.strip():
-        q = query.strip().lower()
+        raw_q = query.strip().lower()
+        norm_q = normalize_text(query)
+        norm_q_alt = norm_q.replace("aa", "a")
         mask = (
-            df["title"].astype(str).str.lower().str.contains(q, regex=False) |
-            df["original_title"].astype(str).str.lower().str.contains(q, regex=False) |
-            df["genres"].astype(str).str.lower().str.contains(q, regex=False)
+            df["title"].astype(str).str.lower().str.contains(raw_q, regex=False) |
+            df["_norm_title"].str.contains(norm_q, regex=False) |
+            df["_norm_title"].str.contains(norm_q_alt, regex=False) |
+            df["_norm_orig"].str.contains(norm_q, regex=False) |
+            df["genres"].astype(str).str.lower().str.contains(raw_q, regex=False)
         )
         filtered = filtered[mask]
 
