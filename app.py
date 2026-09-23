@@ -23,8 +23,26 @@ def index():
   return {'message': 'Hello World'}
 
 @app.get('/movies')
-def get_movies(search: str = "", genre: str = "All genres", limit: int = 50, page: int = 1):
-  return search_catalog(query=search, genre=genre, limit=limit, page=page)
+def get_movies(
+    search: str = "",
+    genre: str = "All genres",
+    language: str = "All languages",
+    min_rating: float = 0.0,
+    year: str = "",
+    sort_by: str = "id-asc",
+    page: int = 1,
+    limit: int = 24
+):
+    return search_catalog(
+        query=search,
+        genre=genre,
+        language=language,
+        min_rating=min_rating,
+        year=year,
+        sort_by=sort_by,
+        page=page,
+        limit=limit
+    )
 
 @app.get('/{name}')
 def get_name(name: str):

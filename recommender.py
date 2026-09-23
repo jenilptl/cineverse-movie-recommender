@@ -112,31 +112,86 @@ def recommend_movie(title: str, n: int = 10):
     }
 
 
-def search_catalog(query: str = "", genre: str = "All genres", limit: int = 50, page: int = 1):
+import math
+
+def search_catalog(
+    query: str = "",
+    genre: str = "All genres",
+    language: str = "All languages",
+    min_rating: float = 0.0,
+    year: str = "",
+    sort_by: str = "id-asc",
+    limit: int = 24,
+    page: int = 1
+):
     """
-    Search and paginate through the full 27,842 movies catalog.
+    Search, filter, sort, and paginate through the full 34,791 movies catalog.
     """
     filtered = df
-    if query and query.strip():
-        raw_q = query.strip().lower()
+
+    # 1. Search Query
+    if query and str(query).strip():
+        raw_q = str(query).strip().lower()
         norm_q = normalize_text(query)
         norm_q_alt = norm_q.replace("aa", "a")
         mask = (
-            df["title"].astype(str).str.lower().str.contains(raw_q, regex=False) |
-            df["_norm_title"].str.contains(norm_q, regex=False) |
-            df["_norm_title"].str.contains(norm_q_alt, regex=False) |
-            df["_norm_orig"].str.contains(norm_q, regex=False) |
-            df["genres"].astype(str).str.lower().str.contains(raw_q, regex=False)
+            filtered["title"].astype(str).str.lower().str.contains(raw_q, regex=False) |
+            filtered["_norm_title"].str.contains(norm_q, regex=False) |
+            filtered["_norm_title"].str.contains(norm_q_alt, regex=False) |
+            filtered["_norm_orig"].str.contains(norm_q, regex=False) |
+            filtered["genres"].astype(str).str.lower().str.contains(raw_q, regex=False)
         )
         filtered = filtered[mask]
 
+    # 2. Genre Filter
     if genre and genre != "All genres":
         filtered = filtered[filtered["genres"].astype(str).str.contains(genre, regex=False)]
 
-    filtered = filtered.sort_values(by="popularity", ascending=False)
-    total_count = len(filtered)
+    # 3. Language Filter
+    if language and language != "All languages":
+        filtered = filtered[filtered["original_language"].astype(str) == str(language).strip()]
 
-    start = max(0, (page - 1) * limit)
+    # 4. Minimum Rating Filter
+    if min_rating and float(min_rating) > 0:
+        filtered = filtered[filtered["vote_average"].astype(float) >= float(min_rating)]
+
+    # 5. Release Year Filter
+    if year and str(year).strip():
+        y = str(year).strip()
+        filtered = filtered[
+            filtered["release_date"].astype(str).str.startswith(y) |
+            (filtered["release_year"].astype(str) == y)
+        ]
+
+    # 6. Sorting (Default: id-asc, starting with ID from smallest to largest)
+    if sort_by == "id-desc":
+        filtered = filtered.sort_values(by="id", ascending=False)
+    elif sort_by == "popularity-desc":
+        filtered = filtered.sort_values(by="popularity", ascending=False)
+    elif sort_by == "popularity-asc":
+        filtered = filtered.sort_values(by="popularity", ascending=True)
+    elif sort_by == "rating-desc":
+        filtered = filtered.sort_values(by="vote_average", ascending=False)
+    elif sort_by == "rating-asc":
+        filtered = filtered.sort_values(by="vote_average", ascending=True)
+    elif sort_by == "year-desc":
+        filtered = filtered.sort_values(by="release_year", ascending=False)
+    elif sort_by == "year-asc":
+        filtered = filtered.sort_values(by="release_year", ascending=True)
+    elif sort_by == "title-asc":
+        filtered = filtered.sort_values(by="title", ascending=True)
+    elif sort_by == "title-desc":
+        filtered = filtered.sort_values(by="title", ascending=False)
+    else:
+        # Default: id-asc
+        filtered = filtered.sort_values(by="id", ascending=True)
+
+    total_count = len(filtered)
+    page = max(1, int(page))
+    limit = max(1, min(100, int(limit)))
+    total_pages = max(1, math.ceil(total_count / limit))
+
+    start = (page - 1) * limit
     end = start + limit
     paged = filtered.iloc[start:end]
 
@@ -157,5 +212,6 @@ def search_catalog(query: str = "", genre: str = "All genres", limit: int = 50, 
         "total": total_count,
         "page": page,
         "limit": limit,
+        "total_pages": total_pages,
         "movies": paged_df.fillna("").to_dict(orient="records")
     }
